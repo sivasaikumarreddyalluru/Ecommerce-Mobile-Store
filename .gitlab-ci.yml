@@ -1,11 +1,9 @@
 stages:
   - build
   - test
-  - push
 
 variables:
   DOCKER_IMAGE_NAME: "ecommerce-mobile-store"
-  DOCKER_REGISTRY: "docker.io"
   DOCKER_DRIVER: overlay2
 
 before_script:
@@ -21,15 +19,12 @@ build:
     - echo "Building Docker image for PHP + MySQL app..."
     - docker build -t ${DOCKER_IMAGE_NAME}:${CI_COMMIT_SHA:0:8} .
     - docker build -t ${DOCKER_IMAGE_NAME}:latest .
-    - echo "Docker image built successfully!"
-  artifacts:
-    reports:
-      dotenv: build.env
+    - echo "✅ Docker image built successfully!"
   only:
     - main
     - develop
 
-# Run basic tests
+# Run PHP syntax tests
 test:
   stage: test
   image: docker:latest
@@ -37,60 +32,14 @@ test:
     - docker:dind
   script:
     - echo "Testing Docker image and PHP syntax..."
-    - docker run --rm ${DOCKER_IMAGE_NAME}:latest php -l index.php
-    - docker run --rm ${DOCKER_IMAGE_NAME}:latest php -l includes/db.php
-    - docker run --rm ${DOCKER_IMAGE_NAME}:latest php -l auth/login.php
-    - echo "PHP syntax tests passed!"
+    - docker build -t ${DOCKER_IMAGE_NAME}:test .
+    - echo "Testing index.php..."
+    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l index.php
+    - echo "Testing db.php..."
+    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l includes/db.php
+    - echo "Testing login.php..."
+    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l auth/login.php
+    - echo "✅ All PHP syntax tests passed!"
   only:
     - main
     - develop
-
-# Push to Docker Hub (optional - requires credentials)
-push:docker_hub:
-  stage: push
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - echo "Pushing image to Docker Hub..."
-    - echo "$DOCKER_HUB_PASSWORD" | docker login -u "$DOCKER_HUB_USERNAME" --password-stdin
-    - docker build -t ${DOCKER_REGISTRY}/${DOCKER_HUB_USERNAME}/${DOCKER_IMAGE_NAME}:${CI_COMMIT_SHA:0:8} .
-    - docker build -t ${DOCKER_REGISTRY}/${DOCKER_HUB_USERNAME}/${DOCKER_IMAGE_NAME}:latest .
-    - docker push ${DOCKER_REGISTRY}/${DOCKER_HUB_USERNAME}/${DOCKER_IMAGE_NAME}:${CI_COMMIT_SHA:0:8}
-    - docker push ${DOCKER_REGISTRY}/${DOCKER_HUB_USERNAME}/${DOCKER_IMAGE_NAME}:latest
-    - echo "Image pushed successfully!"
-  when: manual
-  only:
-    - main
-
-# Trigger Jenkins pipeline (via webhook)
-trigger_jenkins:
-  stage: push
-  script:
-    - echo "Triggering Jenkins pipeline..."
-    - |
-      curl -X POST \
-        ${JENKINS_URL}/job/ecommerce-build/buildWithParameters \
-        --user ${JENKINS_USER}:${JENKINS_TOKEN} \
-        -F token=${JENKINS_BUILD_TOKEN} \
-        -F BRANCH=${CI_COMMIT_REF_NAME} \
-        -F COMMIT_SHA=${CI_COMMIT_SHA}
-    - echo "Jenkins build triggered!"
-  when: manual
-  only:
-    - main
-
-# Deploy to AKS (manual trigger)
-deploy_aks:
-  stage: push
-  image: mcr.microsoft.com/azure-cli:latest
-  script:
-    - echo "Deploying to AKS..."
-    - az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
-    - az aks get-credentials --resource-group $AZURE_RESOURCE_GROUP --name $AZURE_CLUSTER_NAME
-    - kubectl set image deployment/ecommerce ecommerce=${DOCKER_REGISTRY}/${DOCKER_HUB_USERNAME}/${DOCKER_IMAGE_NAME}:${CI_COMMIT_SHA:0:8} || echo "Deployment not found, creating..."
-    - kubectl apply -f k8s-deployment.yml
-    - echo "AKS deployment complete!"
-  when: manual
-  only:
-    - main
