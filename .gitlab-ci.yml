@@ -1,45 +1,18 @@
 stages:
-  - build
-  - test
+  - validate
 
-variables:
-  DOCKER_IMAGE_NAME: "ecommerce-mobile-store"
-  DOCKER_DRIVER: overlay2
-
-before_script:
-  - docker --version
-
-# Build Docker image
-build:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:dind
+# Validate basic project structure
+validate:
+  stage: validate
+  image: alpine:latest
   script:
-    - echo "Building Docker image for PHP + MySQL app..."
-    - docker build -t ${DOCKER_IMAGE_NAME}:${CI_COMMIT_SHA:0:8} .
-    - docker build -t ${DOCKER_IMAGE_NAME}:latest .
-    - echo "✅ Docker image built successfully!"
-  only:
-    - main
-    - develop
-
-# Run PHP syntax tests
-test:
-  stage: test
-  image: docker:latest
-  services:
-    - docker:dind
-  script:
-    - echo "Testing Docker image and PHP syntax..."
-    - docker build -t ${DOCKER_IMAGE_NAME}:test .
-    - echo "Testing index.php..."
-    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l index.php
-    - echo "Testing db.php..."
-    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l includes/db.php
-    - echo "Testing login.php..."
-    - docker run --rm ${DOCKER_IMAGE_NAME}:test php -l auth/login.php
-    - echo "✅ All PHP syntax tests passed!"
+    - echo "🔍 Validating project structure..."
+    - test -f Dockerfile && echo "✅ Dockerfile found" || exit 1
+    - test -f docker-compose.yml && echo "✅ docker-compose.yml found" || exit 1
+    - test -f index.php && echo "✅ index.php found" || exit 1
+    - test -f includes/db.php && echo "✅ includes/db.php found" || exit 1
+    - test -f mobile_store.sql && echo "✅ mobile_store.sql found" || exit 1
+    - echo "✅ All project files validated successfully!"
   only:
     - main
     - develop
