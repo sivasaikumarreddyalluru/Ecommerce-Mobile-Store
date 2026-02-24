@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # PHP + Apache service
+  php-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecommerce-php-app
+    ports:
+      - "8080:80"
+    environment:
+      - DB_HOST=mysql-db
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=mobile_store
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      - mysql-db
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+
+  # MySQL service
+  mysql-db:
+    image: mysql:8.0
+    container_name: ecommerce-mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: mobile_store
+      MYSQL_USER: app_user
+      MYSQL_PASSWORD: app_password
+    volumes:
+      - db_volume:/var/lib/mysql
+      - ./mobile_store.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "3306:3306"
+    networks:
+      - ecommerce-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_volume:
+
+networks:
+  ecommerce-network:
+    driver: bridge
